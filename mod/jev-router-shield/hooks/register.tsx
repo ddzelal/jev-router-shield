@@ -155,6 +155,45 @@ const toggleCompact = async ($: EngineInterface) => {
   await $.store.set(COMPACT_KEY, next)
 }
 
+/** find the router serving this session: ANTHROPIC_BASE_URL, else the default port if it already saw this session
+ *  (Claude Code re-reads settings.json mid-session; the process env keeps the old value) */
+async function discover($: EngineInterface): Promise<boolean> {
+  const base = ((await $.env.get('ANTHROPIC_BASE_URL')) ?? '').replace(/\/+$/, '')
+  const isOurs = async (url: string) => {
+    try {
+      const r = await $.http.fetch(`${url}/__jev/health`)
+      return r.ok && (JSON.parse(r.text) as { name?: string }).name === 'jev-router-shield'
+    } catch {
+      return false
+    }
+  }
+  if (/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base) && (await isOurs(base))) {
+    ROUTER = base
+    return true
+  }
+  if (base !== ROUTER && (await isOurs(ROUTER))) {
+    const r = await fetchLast($)
+    if (r && (r.last || r.live)) return true
+  }
+  return false
+}
+
+let registered = false
+async function attach($: EngineInterface): Promise<boolean> {
+  if (!(await discover($))) {
+    await update($, link, () => 'off' as Link)
+    return false
+  }
+  const stored = await $.store.get(COMPACT_KEY)
+  if (typeof stored === 'boolean') await update($, compact, () => stored)
+  await apply($, await fetchLast($))
+  if (!registered) {
+    registered = true
+    await $.command.register({ name: 'jev', description: 'Pause/resume Jev model routing for this session' })
+  }
+  return true
+}
+
 export const register: Register = on => {
   // While a turn runs, follow every request (tool-loop steps too); a module variable, so a reload drops it.
   let ticker: Timer | null = null
@@ -164,23 +203,7 @@ export const register: Register = on => {
   }
 
   on('session.start', async ($, e, next) => {
-    const base = ((await $.env.get('ANTHROPIC_BASE_URL')) ?? '').replace(/\/+$/, '')
-    let ours = false
-    if (/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base)) {
-      try {
-        const r = await $.http.fetch(`${base}/__jev/health`)
-        ours = r.ok && (JSON.parse(await r.text()) as { name?: string }).name === 'jev-router-shield'
-      } catch {}
-    }
-    if (ours) ROUTER = base
-    if (!ours) {
-      await update($, link, () => 'off' as Link)
-    } else {
-      const stored = await $.store.get(COMPACT_KEY)
-      if (typeof stored === 'boolean') await update($, compact, () => stored)
-      await apply($, await fetchLast($))
-      await $.command.register({ name: 'jev', description: 'Pause/resume Jev model routing for this session' })
-    }
+    await attach($)
     return next(e)
   })
 
@@ -190,7 +213,12 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId !== undefined || (await read($, link)) === 'off') return result
+    if (e.agentId !== undefined) return result
+    // not attached yet (router started or settings changed mid-session): look again once the turn's request went out
+    if ((await read($, link)) === 'off') {
+      $.clock.after(1500, () => void attach($))
+      return result
+    }
     stopTicker()
     if (e.text) {
       // the decision lands when the turn's first request reaches the proxy
@@ -207,7 +235,12 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId !== undefined || (await read($, link)) === 'off') return result
+    if (e.agentId !== undefined) return result
+    // not attached yet (router started or settings changed mid-session): look again once the turn's request went out
+    if ((await read($, link)) === 'off') {
+      $.clock.after(1500, () => void attach($))
+      return result
+    }
     stopTicker()
     $.clock.after(300, () => {
       void fetchLast($).then(r => apply($, r))
