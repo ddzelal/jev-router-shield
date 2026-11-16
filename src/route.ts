@@ -1,6 +1,6 @@
 import type { Config, Level } from "./config";
 import { askJev } from "./jev";
-import { redactStrict, turnShape } from "./redact";
+import { PASSWORD_WORDS, redactStrict, turnShape } from "./redact";
 import { buildVocab, type Vocab } from "./vocab";
 import { appendFile } from "fs/promises";
 import { join } from "path";
@@ -13,16 +13,21 @@ const ORDER: Level[] = ["trivial", "routine", "substantial", "hard", "extreme"];
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const maxEffort = (a?: string, b?: string) => (EFFORTS.indexOf(a ?? "") >= EFFORTS.indexOf(b ?? "") ? a : b);
 
-/** local risk words (English + Bosnian/Croatian/Serbian): a backup for Jev, and the only signal in trusted projects */
-const RISKY_WORDS =
-  /\b(prod(uction|ukcij\w*)?|deploy\w*|release|rollback|migrat\w*|drop\s+(table|database)|truncate|rm\s+-rf|force[- ]push|delete\w*|credential\w*|secret|billing|obri[sš]\w*|izbri[sš]\w*|bri[sš]i\w*|pusti\w*\s+(na|u)\s+prod\w*|na\s+prod\w*)\b/i;
+/** local risk words (English; add your language via config.riskyWords): a backup for Jev, and the only signal in trusted projects */
+const RISKY_BASE = String.raw`prod(uction)?|deploy\w*|release|rollback|migrat\w*|drop\s+(table|database)|truncate|rm\s+-rf|force[- ]push|delete\w*|credential\w*|secret|billing`;
+let riskyRe: { src: string; re: RegExp } | null = null;
+const riskyWords = (cfg: Config) => {
+  const src = [RISKY_BASE, ...cfg.riskyWords].join("|");
+  if (riskyRe?.src !== src) riskyRe = { src, re: new RegExp(`(?<![\\p{L}\\d])(${src})(?![\\p{L}\\d])`, "iu") };
+  return riskyRe.re;
+};
 /** company-project match; cwd + "/" so "~/work" matches "/work/" too */
 export const isCompany = (cfg: Config, p: string) => [...cfg.redacted, ...cfg.trusted].some((t) => (p + "/").includes(t));
 
 let vocab: { v: Vocab; at: number } | null = null;
 export function getVocab(cfg: Config): Vocab {
   if (!vocab || Date.now() - vocab.at > 24 * 3600_000) {
-    vocab = { v: buildVocab((p) => isCompany(cfg, p)), at: Date.now() };
+    vocab = { v: buildVocab((p) => isCompany(cfg, p), cfg.extraWords), at: Date.now() };
     console.log(`[jev-router-shield] vocab: ${vocab.v.known.size} known words (${vocab.v.learned} learned from your non-company prompts)`);
   }
   return vocab.v;
@@ -90,7 +95,8 @@ export function scrub(t: string): string {
   return t
     .replace(/```[\s\S]*?```/g, (m) => `[code block, ${m.split("\n").length} lines]`)
     .replace(/\b(sk|pk|rk|ghp|gho|xox[bap]|apikey|AKIA)[-_A-Za-z0-9]{12,}/g, "[secret]")
-    .replace(/\b(bearer|token|password|passwd|pwd|pass|secret|api[_-]?key|lozinka|sifra|šifra|key)\s*(?:[:=]|\bje\b|\bis\b|\bglasi\b)?\s*[:=]?\s*\S+/gi, "$1 [secret]")
+    .replace(/(?<![\p{L}\d])(bearer|token|secret|api[_-]?key|key|password|passwd|pwd)\s*[:=]\s*\S+/giu, "$1 [secret]")
+    .replace(new RegExp(`(?<![\\p{L}\\d])(${PASSWORD_WORDS})\\s+\\p{L}{1,6}\\s+\\S+`, "giu"), "$1 [secret]")
     .replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email]")
     .replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, "[ip]")
     .replace(/\b[A-Za-z0-9+/_-]{32,}={0,2}/g, "[secret]");
@@ -182,7 +188,7 @@ export async function decide(cfg: Config, key: string | undefined, body: any, se
     // local rules only: keep the model you picked, lift effort for risky work, inherit it for short approvals
     const notes: string[] = [];
     let effort = reqEffort;
-    if (RISKY_WORDS.test(human)) { effort = maxEffort(effort, "high"); notes.push("risky"); }
+    if (riskyWords(cfg).test(human)) { effort = maxEffort(effort, "high"); notes.push("risky"); }
     if (th && words(human) <= cfg.shortReplyWords && EFFORTS.indexOf(th.effort ?? "") > EFFORTS.indexOf(effort ?? "")) {
       effort = th.effort; notes.push("inherit");
     }
@@ -229,11 +235,11 @@ export async function decide(cfg: Config, key: string | undefined, body: any, se
   const notes: string[] = isRedacted ? ["redacted"] : [];
   // risky work (prod, deletes, credentials, money) gets at least the `hard` tier
   // Jev alone, or Jev half-sure plus a local risk word (redacted messages carry less context)
-  const risky = (jev.risky ?? 0) >= cfg.riskyFloor || ((jev.risky ?? 0) >= 0.4 && RISKY_WORDS.test(human));
+  const risky = (jev.risky ?? 0) >= cfg.riskyFloor || ((jev.risky ?? 0) >= 0.4 && riskyWords(cfg).test(human));
   if (risky && ORDER.indexOf(level) < ORDER.indexOf("hard")) {
     level = "hard"; notes.push("risky");
   }
-  // "može" / "ajde kreni" approve the work just proposed: never below the previous turn's level
+  // "ok" / "go ahead" approve the work just proposed: never below the previous turn's level
   if (th && th.level !== "pass" && words(human) <= cfg.shortReplyWords && ORDER.indexOf(level) < ORDER.indexOf(th.level)) {
     level = th.level; notes.push("inherit");
   }

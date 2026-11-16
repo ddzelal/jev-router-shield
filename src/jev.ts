@@ -10,7 +10,7 @@ export interface JevResult {
 
 const CRITERIA: Record<Level, string> = {
   trivial:
-    "No real work follows: thanks, small talk, a yes/no or one-line factual answer, re-running the exact same command. IMPORTANT: an approval or go-ahead ('ok', 'yes', 'može', 'ajde kreni', 'continue', 'do it') starts the work the agent proposed in its previous reply, so judge the size of THAT work, not the length of the message.",
+    "No real work follows: thanks, small talk, a yes/no or one-line factual answer, re-running the exact same command. IMPORTANT: an approval or go-ahead ('ok', 'yes', 'go ahead', 'continue', 'do it', or the same in any language) starts the work the agent proposed in its previous reply, so judge the size of THAT work, not the length of the message.",
   routine:
     "Ordinary bounded task: small edit or rename, run a command and report, fix an obvious error, write a short text, look something up, follow an existing plan step.",
   substantial:
@@ -43,7 +43,7 @@ export async function askJev(cfg: Config, key: string, state: string): Promise<J
           risky: {
             type: "noul",
             instructions:
-              "Would carrying out this message (including approving a plan the agent just proposed) deploy to or change production, delete or overwrite data, touch credentials or permissions, move money, or send something to outside people? Short approvals like 'yes', 'može', 'ajde' inherit the risk of what the agent proposed in its previous reply.",
+              "Would carrying out this message (including approving a plan the agent just proposed) deploy to or change production, delete or overwrite data, touch credentials or permissions, move money, or send something to outside people? Short approvals ('yes', 'go ahead', in any language) inherit the risk of what the agent proposed in its previous reply.",
           },
         },
       }),

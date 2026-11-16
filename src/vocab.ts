@@ -6,7 +6,7 @@
 //   • lowercase entries of the system English dictionary (proper nouns there are capitalized, so skipped)
 //   • words YOU typed in lowercase at least twice in prompts from NON-company projects (~/.claude/history.jsonl):
 //     your own working vocabulary in whatever language you write, inflections included
-//   • a small seed of Bosnian/Croatian/Serbian function words and generic dev / telecom terms (not names)
+//   • generic software terms below, plus `extraWords` from your config (your language, your domain jargon)
 // Capitalized words in the middle of a sentence are treated as names even when they are dictionary words
 // ("Orange", "Three"), unless they are generic tech terms.
 
@@ -14,26 +14,15 @@ import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
-const SEED_BHS = `a i u o na za od do sa s iz po pri kod bez kroz preko oko prema ka nad pod pred između izmedju
-je su sam si smo ste bi bih bismo biste bio bila bilo bili bude budu će ce ćemo cemo ću cu ćeš ces neće nece nije nisu nisam
-da ne li ni ili pa te ali jer ako kad kada dok tek još jos već vec samo baš bas sve svi svaki nešto nesto ništa nista neko niko
-šta sta što sto kako zašto zasto gde gdje koji koja koje koga kome čemu cemu ko kog čiji ciji ovo ono to taj ta ova ovaj onaj
-ovde ovdje tamo sad sada onda opet isto takođe takodje može moze mogu možemo mozemo treba trebamo trebalo hoću hocu hoćeš hoces
-hajde ajde aj daj evo eto ok okej jeste nije hvala molim pls ajmo kreni krenimo uradi uradimo proveri provjeri pogledaj vidi
-napravi dodaj izmeni izmijeni promeni promijeni obriši obrisi popravi ispravi pokreni pusti deployaj deploy testiraj objasni
-zašto znači znaci recimo npr itd slično slicno malo više vise manje dobro loše lose radi ne radi greška greska problem`;
-
-const SEED_TECH = `api apis http https rest grpc json yaml xml csv sql nosql db database postgres postgresql mysql redis kafka
-rabbitmq docker kubernetes k8s kubectl helm git github gitlab ci cd pipeline build deploy release rollback hotfix feature
-branch merge commit pr pull push rebase tag env prod production staging dev local localhost server servis service backend
-frontend ui ux css html js ts typescript javascript node bun npm pnpm yarn react next nextjs vue angular python go golang
-rust java dotnet net csharp kotlin swift linux ubuntu macos bash zsh ssh vpn dns tcp udp ip sip rtp sbc pbx voip smpp
-sms smsc mms otp msisdn imsi hlr mnp cdr cdrs asr acd pdd ner mos qos lcr route routes routing ruta rute rutu prefix prefiks
-carrier carriers vendor vendors trunk trunks rate rates tarifa tarife cena cijena cene cijene minut minuti minuta kanal
-kanali grafana loki mimir tempo alloy prometheus otel opentelemetry sentry coolify railway vercel aws gcp azure s3 ec2
-lambda cron job jobs queue worker workers cache log logs logging metric metrics alert alerts dashboard panel query
-endpoint endpoints webhook token auth oauth jwt login logout user users admin role roles permission permissions
-test tests unit e2e lint migration migracija schema index tabela table column kolona row red mcp llm ai claude jev`;
+const SEED_TECH = `api apis http https rest grpc graphql json yaml xml csv sql nosql db database postgres postgresql mysql
+sqlite redis kafka rabbitmq docker kubernetes k8s kubectl helm terraform git github gitlab ci cd pipeline build deploy release
+rollback hotfix feature branch merge commit pr pull push rebase tag env prod production staging dev local localhost server
+service backend frontend ui ux css html js ts tsx jsx typescript javascript node bun deno npm pnpm yarn react next nextjs vue
+svelte angular python go golang rust java kotlin swift dotnet csharp linux ubuntu macos windows bash zsh ssh vpn dns tcp udp ip
+tls ssl cors grafana prometheus otel opentelemetry sentry aws gcp azure s3 ec2 lambda cron job jobs queue worker workers cache
+log logs logging metric metrics alert alerts dashboard query endpoint endpoints webhook token auth oauth jwt sso login logout
+user users admin role roles permission permissions test tests unit e2e lint eslint prettier migration schema index table
+column row mcp llm ai claude jev readme config todo`;
 
 const WORD = /[\p{L}][\p{L}\p{M}'’-]*/gu;
 const isCap = (w: string) => /^\p{Lu}/u.test(w);
@@ -49,8 +38,8 @@ export interface Vocab {
 
 const words = (s: string) => s.toLowerCase().split(/\s+/).filter(Boolean);
 
-export function buildVocab(excludeProjects: (p: string, sessionId?: string) => boolean): Vocab {
-  const known = new Set<string>([...words(SEED_BHS), ...words(SEED_TECH)]);
+export function buildVocab(excludeProjects: (p: string, sessionId?: string) => boolean, extra: string[] = []): Vocab {
+  const known = new Set<string>([...words(SEED_TECH), ...extra.flatMap(words)]);
   const core = new Set<string>(known);
   const tech = new Set<string>(words(SEED_TECH));
   try {

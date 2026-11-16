@@ -75,7 +75,8 @@ A word in a work folder leaves your machine only if it is one of these:
 
 - a lowercase word from the system dictionary (`/usr/share/dict/words`; proper nouns there are capitalized and skipped);
 - a word **you** typed in lowercase at least twice in Claude Code prompts from non-work folders (`~/.claude/history.jsonl`). This is your own working vocabulary in your language, read locally and never uploaded;
-- a generic dev or telecom term (SQL, deploy, SIP, CDR…), or a short seed of Bosnian/Croatian/Serbian function words.
+- a generic software term (SQL, deploy, endpoint…);
+- a word in `extraWords` in your config: common words of your language or your domain jargon, if your history is still short.
 
 A capitalized word in the middle of a sentence counts as a name, even when it is in the dictionary ("Orange", "Three"). So does a letters-plus-digits code (`A1`, `node7x`).
 
@@ -90,6 +91,17 @@ becomes
 On the author's own prompts (held out from vocabulary learning), Jev's level matched the unredacted level 68–70% of the time and was within one level 98–100% of the time, with about 12–15% of words masked. In work folders a cheaper level needs a little more certainty (+0.05), so mistakes lean toward the stronger model.
 
 `redactTerms` in the config adds names to always replace with `[name]`, as an extra layer.
+
+Any language works: Jev reads any language, and the vocabulary comes from your own prompts. Two optional config lists help:
+
+```json
+{
+  "extraWords": ["merhaba", "lütfen", "kontrol", "et"],
+  "riskyWords": ["sil\\w*", "canlıya"]
+}
+```
+
+`riskyWords` are regex fragments that count as risk words on top of the English ones (prod, deploy, delete, migrate…).
 
 **Limits:** redaction is pattern-based. It is designed to fail closed, but it is not a formal guarantee. Read `jev-router-shield sent` for a while after setting it up and decide for yourself.
 

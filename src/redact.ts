@@ -4,19 +4,26 @@ import { allowlist, type Vocab } from "./vocab";
 // message, never its data. Everything that could identify a customer, number, route, host,
 // price or secret is replaced by a typed placeholder. Fail closed: when in doubt, it goes.
 
+/** "password" in many languages */
+export const PASSWORD_WORDS =
+  "password|passwd|pwd|passwort|kennwort|contrase[nñ]a|senha|mot de passe|parola|wachtwoord|lösenord|losenord|has[lł]o|lozinka|[sš]ifra|geslo|şifre|sifre|пароль|كلمة السر|密码|パスワード";
+
 /** order matters: secrets and structured things first, generic numbers last */
 const RULES: [RegExp, string][] = [
   [/```[\s\S]*?```/g, "[code]"],
   [/`[^`\n]{1,200}`/g, "[code]"],
   [/-----BEGIN[\s\S]*?-----END[^-]*-----/g, "[secret]"],
   [/\b(sk|pk|rk|ghp|gho|ghs|xox[bap]|AKIA|eyJ)[-_A-Za-z0-9.]{8,}/g, "[secret]"],
-  [/\b(bearer|token|password|passwd|pwd|pass|secret|api[_-]?key|lozinka|sifra|šifra|key|user(name)?|login)\s*(?:[:=]|\bje\b|\bis\b|\bglasi\b)\s*\S+/gi, "$1 [secret]"],
+  [/(?<![\p{L}\d])(bearer|token|secret|api[_-]?key|key|user(?:name)?|login|password|passwd|pwd)\s*[:=]\s*\S+/giu, "$1 [secret]"],
+  // a password word, one short linking word in any language ('is', 'ist', 'es', 'je'), then the value
+  [new RegExp(`(?<![\\p{L}\\d])(${PASSWORD_WORDS})\\s+\\p{L}{1,6}\\s+\\S+`, "giu"), "$1 [secret]"],
   [/\b[\w.+-]+@[\w-]+(\.[\w-]+)+\b/g, "[email]"],
   [/\b(?:https?|ftp|ssh|postgres(?:ql)?|mysql|redis|mongodb(?:\+srv)?|sip|wss?):\/\/\S+/gi, "[url]"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[id]"],
   [/\b(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?(?::\d+)?\b/g, "[ip]"],
   [/\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b/gi, "[ip]"],
-  [/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|rs|ba|me|eu|de|uk|co|dev|app|ai|cloud|local|internal|lan|tel|xyz)\b(?::\d+)?/gi, "[host]"],
+  // any country-code domain (2 letters) plus common generic ones; file names like a.ts go too (fail closed)
+  [/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|dev|app|ai|cloud|local|internal|lan|corp|tel|xyz|info|biz|online|tech|site|[a-z]{2})\b(?::\d+)?/gi, "[host]"],
   [/(?:~|\.{1,2})?\/(?:[\w.@-]+\/)+[\w.@-]*/g, "[path]"],
   [/\b[A-Za-z]:\\[^\s]+/g, "[path]"],
   [/\b[0-9a-f]{16,}\b/gi, "[id]"],
@@ -25,8 +32,9 @@ const RULES: [RegExp, string][] = [
   [/(?:\+|\b00)\d[\d\s().-]{6,}\d/g, "[phone]"],
   [/\b\d[\d\s-]{7,}\d\b/g, "[phone]"],
   // money and prices
-  [/(?:[$€£]|\b(?:eur|usd|rsd|bam|km|din)\b)\s?\d[\d.,]*/gi, "[amount]"],
-  [/\b\d[\d.,]*\s?(?:[$€£]|eur|usd|rsd|bam|km|din|centi?|cents?)\b/gi, "[amount]"],
+  // money: currency symbols, any ISO 4217 code (USD, EUR, TRY, …), common lowercase codes
+  [/(?:[$€£¥₹₽₺₩]|\b[A-Z]{3}\b|\b(?:eur|usd|gbp|chf)\b)\s?\d[\d.,]*/g, "[amount]"],
+  [/\b\d[\d.,]*\s?(?:[$€£¥₹₽₺₩]|[A-Z]{3}\b|(?:eur|usd|gbp|chf|cents?)\b)/g, "[amount]"],
   [/\b\d+[.,]\d+\b/g, "[num]"],
   // any number of 4+ digits (prefixes, IDs, counts, ports, dates)
   [/\b\d{4,}\b/g, "[num]"],

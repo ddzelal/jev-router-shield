@@ -28,11 +28,15 @@ export interface Config {
   redacted: string[];
   /** names that must never leave in redacted projects (customers, carriers, partners, people) */
   redactTerms: string[];
+  /** extra words allowed out of redacted projects: your language's common words, your domain jargon */
+  extraWords: string[];
+  /** extra risk words/stems (regex fragments) in your language, e.g. "sil\\w*"; a backup for Jev and the only signal in trusted projects */
+  riskyWords: string[];
   /** idle minutes after which a thread may be re-decided from scratch */
   idleResetMin: number;
   /** below this context (tokens) the model may go DOWN mid-session: rebuilding a small cache is cheap */
   freeSwitchTokens: number;
-  /** a reply of at most this many words ("može", "ajde kreni") never gets a lower level than the turn before */
+  /** a reply of at most this many words ("ok", "go ahead") never gets a lower level than the turn before */
   shortReplyWords: number;
   /** Jev's P(risky) at or above this lifts the turn to at least `hard` */
   riskyFloor: number;
@@ -61,6 +65,8 @@ export const DEFAULTS: Config = {
   trusted: [],
   redacted: [],
   redactTerms: [],
+  extraWords: [],
+  riskyWords: [],
   idleResetMin: 60,
   freeSwitchTokens: 50_000,
   shortReplyWords: 6,

@@ -62,3 +62,14 @@ describe("turnShape", () => {
     expect(s).not.toContain("secret");
   });
 });
+
+describe("any language", () => {
+  test("secrets after a linking word in any language", () => {
+    for (const t of ["password is hunter2", "Passwort ist hunter2", "contraseña es hunter2", "lozinka je hunter2", "token: hunter2"])
+      expect(redactStrict(t)).not.toContain("hunter2");
+  });
+  test("amounts in any currency, hosts on any country domain", () => {
+    const out = redactStrict("costs 12.5 TRY or ¥300, host api.firma.tr and shop.example.jp");
+    for (const leak of ["12.5", "300", "firma", "example"]) expect(out).not.toContain(leak);
+  });
+});
