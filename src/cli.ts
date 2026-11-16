@@ -83,8 +83,13 @@ async function startService() {
 </dict></plist>
 `);
     const uid = process.getuid!();
-    await $`launchctl bootout gui/${uid}/${LABEL}`.quiet().nothrow();
-    await $`launchctl bootstrap gui/${uid} ${PLIST}`.quiet();
+    // already loaded → restart in place (bootout is async, an immediate bootstrap fails with EIO)
+    const loaded = (await $`launchctl print gui/${uid}/${LABEL}`.quiet().nothrow()).exitCode === 0;
+    if (loaded) await $`launchctl bootout gui/${uid}/${LABEL}`.quiet().nothrow();
+    for (let i = 0; i < 10; i++) {
+      if ((await $`launchctl bootstrap gui/${uid} ${PLIST}`.quiet().nothrow()).exitCode === 0) break;
+      await Bun.sleep(300);
+    }
   } else {
     mkdirSync(join(HOME, ".config/systemd/user"), { recursive: true });
     writeFileSync(UNIT, `[Unit]
