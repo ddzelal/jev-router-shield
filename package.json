@@ -1,0 +1,13 @@
+{
+  "name": "jev-router-shield",
+  "version": "0.1.0",
+  "description": "Local proxy that lets Jev (TypeSafe) pick the Claude model and effort per turn in Claude Code, without your company data leaving the machine",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "jev-router-shield": "src/cli.ts" },
+  "files": ["src", "mod", "README.md", "LICENSE"],
+  "scripts": { "test": "bun test", "start": "bun src/server.ts" },
+  "engines": { "bun": ">=1.1" },
+  "repository": { "type": "git", "url": "git+https://github.com/ddzelal/jev-router-shield.git" },
+  "keywords": ["claude-code", "jev", "typesafe", "model-router", "proxy", "privacy", "redaction"]
+}

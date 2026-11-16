@@ -1,0 +1,5 @@
+{
+  "name": "jev-router-shield",
+  "owner": { "name": "ddzelal" },
+  "plugins": [{ "name": "jev-router-shield", "source": "./mod/jev-router-shield", "description": "Live model/effort card for the jev-router-shield proxy" }]
+}

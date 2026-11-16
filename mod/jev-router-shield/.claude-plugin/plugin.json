@@ -1,0 +1,6 @@
+{
+  "name": "jev-router-shield",
+  "version": "0.1.0",
+  "description": "Live card above the prompt: which model and effort jev-router-shield picked, why, and what the session costs; /jev or the footer button pauses routing",
+  "types": "./types/index.d.ts"
+}
