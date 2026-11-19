@@ -233,6 +233,28 @@ function report(days = 7) {
   console.log(`\nOpus → Sonnet: ${moved.length} req, ${(100 * moved.reduce((a, r) => a + r.ctx, 0) / tot).toFixed(0)}% of context tokens`);
   console.log(`Same model, effort changed: ${lowered.length} req`);
   console.log(`Retried with original (rejected rewrite): ${rows.filter((r) => r.retried).length}`);
+  // what Claude used (logged since v0.2): skills, subagents, MCP servers, slash commands, tools
+  const used: Record<string, Record<string, number>> = { skill: {}, agent: {}, mcp: {}, cmd: {}, tool: {} };
+  for (const r of rows) for (const u of r.used ?? []) {
+    const m = /^(skill|agent|mcp|cmd):(.+)$/.exec(u);
+    const [k, n] = m ? [m[1], m[2]] : ["tool", u];
+    used[k][n] = (used[k][n] ?? 0) + 1;
+  }
+  const list = (title: string, m: Record<string, number>, n = 12) => {
+    const e = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, n);
+    if (e.length) console.log(`\n${title}\n  ` + e.map(([k, v]) => `${k} ${v}`).join("  ·  "));
+  };
+  if (rows.some((r) => r.used)) {
+    list("Skills", used.skill); list("Subagents", used.agent); list("MCP servers (calls)", used.mcp);
+    list("Slash commands you typed", used.cmd); list("Tools", used.tool, 15);
+  }
+  // API-list-price equivalent by project (logged since v0.2)
+  const cost: Record<string, number> = {};
+  for (const r of rows) if (r.usd) { const k = String(r.cwd ?? "?").split("/").slice(0, 3).join("/"); cost[k] = (cost[k] ?? 0) + r.usd; }
+  if (Object.keys(cost).length) {
+    console.log("\nAPI-price equivalent by project");
+    for (const [k, v] of Object.entries(cost).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`  ${k.padEnd(36)} $${v.toFixed(2)}`);
+  }
   const big = rows.filter((r) => r.ctx > 150_000);
   console.log(`Requests with >150k context: ${big.length} (${(100 * big.reduce((a, r) => a + r.ctx, 0) / tot).toFixed(0)}% of tokens) ← start fresh sessions more often`);
 }

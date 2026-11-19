@@ -125,6 +125,7 @@ Message tags override routing for one turn: `#fast` `#sonnet` `#opus` `#max` `#f
 - **Line 2:** Jev's level and confidence for your last message, what the router did, rule chips (`redacted`, `risky`, `inherit`, `escalated`), and the session's model mix.
 - **Line 3, "used":** what Claude used since your last message: skills, subagents, MCP servers (by server) and the other tools, with counts, subagents' calls included. `/jev-activity` lists the same for the turn and the whole session.
 - **Line 4:** API-list-price equivalent for the session and for today, and how much routing saved.
+- **Big context:** above 150k tokens every request re-reads the whole context, and the router will not move to a smaller model (the cache would be lost). The card then shows `↻ big context: /jev-handoff`. That command has Claude write a handoff note to `~/.claude/handoffs/`. Open a new session in the same folder and type `/jev-resume` to continue from it with a small context.
 - The `◆ Jev` footer button (hotkey `j`) or `/jev` pauses routing for this session only. `▴`/`▾` switches to a one-line view.
 
 ## Commands
@@ -132,7 +133,7 @@ Message tags override routing for one turn: `#fast` `#sonnet` `#opus` `#max` `#f
 ```
 jev-router-shield setup [--key K] [--work "a,b"] [--never "c"] [--port N] [--yes]
 jev-router-shield status            # service, Claude Code link, key, folder modes
-jev-router-shield report [days]     # what was sent, by model, level and rule
+jev-router-shield report [days]     # models, levels, rules; skills, subagents, MCP servers, tools; cost by project
 jev-router-shield sent [n]          # exactly what left the machine from work folders
 jev-router-shield logs [n] | config
 jev-router-shield off | on          # bypass without stopping the service

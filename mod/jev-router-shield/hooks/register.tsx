@@ -43,6 +43,19 @@ const top = (r: Record<string, number>, n = 6) =>
     .map(([k, v]) => (v > 1 ? `${k}×${v}` : k))
     .join(' ')
 
+const HANDOFF_PROMPT = `Write a handoff note so a FRESH session can continue this work without this conversation (its context has grown large, which makes every request slow and expensive).
+Save it as ~/.claude/handoffs/<this project folder's name>-<YYYY-MM-DD-HHMM>.md (create the folder if needed). Contents, under ~80 lines, no secrets or keys:
+- the user's language and how they like to work (preferences, rules they stated)
+- goal of the work
+- current state: what is done and verified, what is done but NOT verified
+- decisions the user made, and constraints
+- open tasks, in order, with the next step first
+- key files and paths, commands to run or check
+- pitfalls already hit, so they are not repeated
+Then reply in the user's language with the path and one line: open a new session in this folder and type /jev-resume.`
+
+const RESUME_PROMPT = `Continue from the newest handoff note for this project: the newest file in ~/.claude/handoffs/ whose name starts with this project folder's name. Read it, check the current state briefly (files, git status), then tell me in a few lines, in the language the note says I use, where we are and what the next step is. Do not start changing things before that.`
+
 const isEmpty = (a: Activity) => !Object.values(a).some(r => Object.keys(r).length)
 
 /** plain-text summary for /jev-activity */
@@ -263,6 +276,17 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // a big context makes every request expensive and stops Jev from moving down: hand off to a fresh session
+  on('command.run', { command: 'jev-handoff' }, async $ => {
+    void $.prompt.submit({ text: HANDOFF_PROMPT })
+    return { text: 'Writing a handoff note for a fresh session…' }
+  })
+
+  on('command.run', { command: 'jev-resume' }, async $ => {
+    void $.prompt.submit({ text: RESUME_PROMPT })
+    return { text: 'Resuming from the latest handoff note…' }
+  })
+
   on('command.run', { command: 'jev-activity' }, async $ => ({
     text: `This turn:\n${describe(await read($, turnAct))}\n\nThis session:\n${describe(await read($, sessAct))}`,
   }))
@@ -444,6 +468,7 @@ export const register: Register = on => {
               {NOTE[n]!.text}
             </Text>
           ))}
+          {ctxK >= BIG_CTX_K && !working && <Text color="warning">↻ big context: /jev-handoff</Text>}
           {p?.jevMs !== undefined && <Text dimColor>{p.jevMs}ms</Text>}
           {s && s.turns > 0 && (
             <Text wrap="truncate-end">

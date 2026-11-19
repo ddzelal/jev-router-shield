@@ -1,6 +1,6 @@
 {
   "name": "jev-router-shield",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local proxy that lets Jev (TypeSafe) pick the Claude model and effort per turn in Claude Code, without your company data leaving the machine",
   "license": "MIT",
   "type": "module",

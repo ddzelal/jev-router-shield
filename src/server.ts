@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from "fs/promises";
 import { DIR, LOG, NAME, loadConfig, loadKey } from "./config";
+import { usedIn } from "./usage";
 import { applyDecision, decide, paused, type Decision } from "./route";
 
 const cfg = loadConfig();
@@ -72,8 +73,9 @@ function rebuildToday() {
   } catch {}
 }
 
-function account(d: Decision, ctx: number, usage: any) {
-  if (!d.session || d.kind === "background") return;
+/** adds the request to the session and today totals; returns its API-list-price cost */
+function account(d: Decision, ctx: number, usage: any): number | undefined {
+  if (!d.session || d.kind === "background") return priceOf(tierOf(d.model), usage);
   const st = statsBySession.get(d.session) ?? { since: Date.now(), turns: 0, tiers: {}, downTok: 0, totalTok: 0, costUsd: 0, baseUsd: 0 };
   const sentTier = tierOf(d.model), reqTier = tierOf(d.reqModel);
   const cost = priceOf(sentTier, usage);
@@ -88,6 +90,7 @@ function account(d: Decision, ctx: number, usage: any) {
   if ((TIER_RANK[t] ?? 0) < (TIER_RANK[tierOf(d.reqModel)] ?? 0)) st.downTok += ctx;
   if (d.preview !== undefined) st.turns++;
   statsBySession.set(d.session, st);
+  return cost;
 }
 const waiters = new Map<string, Set<() => void>>();
 /** P(the task needs at most `level`): what the router actually thresholds on */
@@ -160,7 +163,7 @@ async function sniffUsage(stream: ReadableStream<Uint8Array>, d: Decision, statu
     }
   } catch {}
   const ctx = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
-  if (status < 400) account(d, ctx, { ...usage, output_tokens: out });
+  const usd = status < 400 ? account(d, ctx, { ...usage, output_tokens: out }) : undefined;
   if (d.session && ctx) { const l = liveBySession.get(d.session); if (l) l.ctxK = Math.round(ctx / 1000); }
   log({
     kind: d.kind, cwd: d.cwd?.replace(/^\/Users\/[^/]+/, "~"), thread: d.thread.slice(-14), status, retried,
@@ -168,6 +171,7 @@ async function sniffUsage(stream: ReadableStream<Uint8Array>, d: Decision, statu
     risky: d.risky, notes: d.notes?.length ? d.notes : undefined,
     ctx: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0),
     cacheRead: usage.cache_read_input_tokens, cacheWrite: usage.cache_creation_input_tokens, out, preview: d.preview,
+    usd: usd ? Math.round(usd * 1e5) / 1e5 : undefined, used: d.used,
   });
 }
 
@@ -205,6 +209,7 @@ Bun.serve({
     try { d = await decide(cfg, key, body, req.headers.get("x-claude-code-session-id"), raw); }
     catch (e) { console.error("[jev-router-shield] decide failed", e); d = { thread: "err", kind: "fallback", reqModel: body.model, model: body.model, estTokens: 0 }; }
 
+    try { const u = usedIn(body); if (u.length) d.used = u; } catch {}
     remember(d);
     const changed = d.model !== body.model || d.effort !== body.output_config?.effort;
     let r = await fetch(target, { method: "POST", headers, body: changed ? JSON.stringify(applyDecision(body, d)) : raw });

@@ -48,6 +48,8 @@ const threads = new Map<string, Thread>();
 export const paused = new Set<string>();
 
 export interface Decision {
+  /** tools/skills/agents/MCP servers used in the step this request answers (src/usage.ts) */
+  used?: string[];
   thread: string;
   cwd?: string;
   kind: "human" | "loop" | "background" | "trusted" | "tag" | "fallback" | "unknown" | "paused" | "pinned";
