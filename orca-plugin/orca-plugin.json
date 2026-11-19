@@ -1,0 +1,32 @@
+{
+  "manifestVersion": 2,
+  "id": "jev-router-shield",
+  "name": "Jev",
+  "version": "0.1.0",
+  "description": "Jev router card for every Claude Code agent in the workspace, chat or terminal: model, effort, context, Jev level, tools used, cost. Reads the local jev-router-shield proxy only.",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "jev-router-shield",
+        "title": "Jev",
+        "icon": "gauge",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "agent:read"
+    },
+    {
+      "kind": "workspace:read"
+    }
+  ]
+}

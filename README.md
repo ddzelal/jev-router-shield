@@ -128,6 +128,10 @@ Message tags override routing for one turn: `#fast` `#sonnet` `#opus` `#max` `#f
 - **Big context:** above 150k tokens every request re-reads the whole context, and the router will not move to a smaller model (the cache would be lost). The card then shows `↻ big context: /jev-handoff`. That command has Claude write a handoff note to `~/.claude/handoffs/`. Open a new session in the same folder and type `/jev-resume` to continue from it with a small context.
 - The `◆ Jev` footer button (hotkey `j`) or `/jev` pauses routing for this session only. `▴`/`▾` switches to a one-line view.
 
+## Orca
+
+In [Orca](https://github.com/stablyai/orca), agents opened as a **chat** do not draw Claude Code's card. Install the Orca panel in [`orca-plugin/`](orca-plugin/) to see the same card for every Claude agent of a workspace, chat or terminal.
+
 ## Commands
 
 ```

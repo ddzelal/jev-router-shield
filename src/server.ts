@@ -34,7 +34,7 @@ interface Last {
 const lastBySession = new Map<string, Last>();
 
 /** the request in flight / last sent for a session, tool-loop steps included */
-interface Live { ts: number; kind: string; model: string; effort?: string; ctxK: number; step: number; notes?: string[] }
+interface Live { ts: number; kind: string; model: string; effort?: string; ctxK: number; step: number; notes?: string[]; turnStart?: number; used?: Record<string, number> }
 const liveBySession = new Map<string, Live>();
 
 /** per-session totals since the proxy started: requests and context tokens per model tier */
@@ -105,7 +105,11 @@ function remember(d: Decision) {
     const step = d.preview !== undefined ? 1 : (prevLive?.step ?? 0) + 1;
     // keep a note (e.g. "escalated") visible for the rest of the turn
     const notes = d.preview !== undefined ? d.notes : [...new Set([...(prevLive?.notes ?? []), ...(d.notes ?? [])])];
-    liveBySession.set(d.session, { ts: Date.now(), kind: d.kind, model: d.model, effort: d.effort, ctxK: Math.round(d.estTokens / 1000), step, notes });
+    // what Claude used this turn (skills, agents, MCP, tools), counted per request step
+    const used: Record<string, number> = d.preview !== undefined ? {} : { ...(prevLive?.used ?? {}) };
+    for (const u of d.used ?? []) used[u] = (used[u] ?? 0) + 1;
+    const turnStart = d.preview !== undefined ? Date.now() : (prevLive?.turnStart ?? Date.now());
+    liveBySession.set(d.session, { ts: Date.now(), kind: d.kind, model: d.model, effort: d.effort, ctxK: Math.round(d.estTokens / 1000), step, notes, turnStart, used });
   }
   // a new human turn carries a preview; paused/pinned have none but are worth showing
   const turn = d.preview !== undefined || d.kind === "paused" || d.kind === "pinned";
@@ -170,7 +174,7 @@ async function sniffUsage(stream: ReadableStream<Uint8Array>, d: Decision, statu
     req: `${d.reqModel}/${d.reqEffort ?? "-"}`, sent: `${d.model}/${d.effort ?? "-"}`, level: d.level, probs: d.probs, jevMs: d.jevMs,
     risky: d.risky, notes: d.notes?.length ? d.notes : undefined,
     ctx: (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0),
-    cacheRead: usage.cache_read_input_tokens, cacheWrite: usage.cache_creation_input_tokens, out, preview: d.preview,
+    cacheRead: usage.cache_read_input_tokens, cacheWrite: usage.cache_creation_input_tokens, out, turn: d.preview !== undefined || undefined,
     usd: usd ? Math.round(usd * 1e5) / 1e5 : undefined, used: d.used,
   });
 }
