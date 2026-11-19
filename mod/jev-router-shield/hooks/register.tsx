@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, Register, Timer } from 'claude-code'
 
-import type { Link, Live, Pick, Stats, Today } from '../types'
+import type { Activity, Link, Live, Pick, Stats, Today } from '../types'
 
 // The local jev-router-shield proxy. The mod only reads its decisions; routing stays in the proxy.
 // Its address is whatever ANTHROPIC_BASE_URL points to (set by `jev-router-shield setup`).
@@ -18,6 +18,46 @@ const today = atom({ plugin: 'jev-router-shield', key: 'today' } as const, null)
 const paused = atom({ plugin: 'jev-router-shield', key: 'paused' } as const, false)
 const link = atom({ plugin: 'jev-router-shield', key: 'link' } as const, 'off')
 const compact = atom({ plugin: 'jev-router-shield', key: 'compact' } as const, false)
+const EMPTY: Activity = { skills: {}, agents: {}, mcp: {}, tools: {} }
+const turnAct = atom({ plugin: 'jev-router-shield', key: 'turnAct' } as const, EMPTY)
+const sessAct = atom({ plugin: 'jev-router-shield', key: 'sessAct' } as const, EMPTY)
+
+/** one use of `name` in `kind`, immutably */
+export const bump = (a: Activity, kind: keyof Activity, name: string): Activity => ({
+  ...a,
+  [kind]: { ...a[kind], [name]: (a[kind][name] ?? 0) + 1 },
+})
+
+/** a tool call → which bucket it counts in (skills come from skill.prompt, not the Skill tool) */
+export const classify = (tool: string, args: Record<string, unknown>): [keyof Activity, string] | null => {
+  if (tool === 'Skill') return null
+  if (tool.startsWith('mcp__')) return ['mcp', tool.split('__')[1] ?? 'mcp']
+  if (tool === 'Agent' || tool === 'Task') return ['agents', String(args.subagent_type ?? 'general-purpose')]
+  return ['tools', tool]
+}
+
+const top = (r: Record<string, number>, n = 6) =>
+  Object.entries(r)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([k, v]) => (v > 1 ? `${k}×${v}` : k))
+    .join(' ')
+
+const isEmpty = (a: Activity) => !Object.values(a).some(r => Object.keys(r).length)
+
+/** plain-text summary for /jev-activity */
+export const describe = (a: Activity) =>
+  isEmpty(a)
+    ? 'nothing used yet'
+    : [
+        ['skills', a.skills],
+        ['subagents', a.agents],
+        ['MCP servers', a.mcp],
+        ['tools', a.tools],
+      ]
+        .filter(([, r]) => Object.keys(r as Record<string, number>).length)
+        .map(([k, r]) => `${k}: ${top(r as Record<string, number>, 30)}`)
+        .join('\n')
 
 const TIER_COLOR: Record<string, Color> = { haiku: 'success', sonnet: 'suggestion', opus: 'claude', fable: 'merged' }
 const RANK: Record<string, number> = { haiku: 1, sonnet: 2, opus: 3, fable: 4 }
@@ -207,6 +247,26 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // what Claude uses, main loop and subagents alike
+  on('tool.call', async ($, e, next) => {
+    const c = classify(e.tool, e as unknown as Record<string, unknown>)
+    if (c) {
+      await update($, turnAct, a => bump(a, c[0], c[1]))
+      await update($, sessAct, a => bump(a, c[0], c[1]))
+    }
+    return next(e)
+  })
+
+  on('skill.prompt', async ($, e, next) => {
+    await update($, turnAct, a => bump(a, 'skills', e.skill))
+    await update($, sessAct, a => bump(a, 'skills', e.skill))
+    return next(e)
+  })
+
+  on('command.run', { command: 'jev-activity' }, async $ => ({
+    text: `This turn:\n${describe(await read($, turnAct))}\n\nThis session:\n${describe(await read($, sessAct))}`,
+  }))
+
   on('command.run', { command: 'jev' }, async $ => ({
     text: `Jev routing ${(await toggle($)) ? 'paused' : 'on'} for this session.`,
   }))
@@ -214,6 +274,7 @@ export const register: Register = on => {
   on('turn.start', async ($, e, next) => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
+    if (e.text) await update($, turnAct, () => EMPTY)
     // not attached yet (router started or settings changed mid-session): look again once the turn's request went out
     if ((await read($, link)) === 'off') {
       $.clock.after(1500, () => void attach($))
@@ -235,12 +296,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId !== undefined) return result
-    // not attached yet (router started or settings changed mid-session): look again once the turn's request went out
-    if ((await read($, link)) === 'off') {
-      $.clock.after(1500, () => void attach($))
-      return result
-    }
+    if (e.agentId !== undefined || (await read($, link)) === 'off') return result
     stopTicker()
     $.clock.after(300, () => {
       void fetchLast($).then(r => apply($, r))
@@ -286,6 +342,7 @@ export const register: Register = on => {
     const l = await read($, live)
     const s = await read($, stats)
     const day = await read($, today)
+    const act = await read($, turnAct)
     if (p === null && l === null) return next(e)
     const notes = [...new Set([...(p?.notes ?? []), ...(l?.notes ?? [])])].filter(n => NOTE[n])
 
@@ -401,6 +458,33 @@ export const register: Register = on => {
             </Text>
           )}
         </Box>
+        {!isEmpty(act) && (
+          <Text wrap="truncate-end">
+            <Text dimColor>used </Text>
+            {Object.keys(act.skills).length > 0 && (
+              <Text>
+                <Text color="claude">skill </Text>
+                <Text bold>{top(act.skills)}</Text>
+                <Text dimColor>{'  '}</Text>
+              </Text>
+            )}
+            {Object.keys(act.agents).length > 0 && (
+              <Text>
+                <Text color="suggestion">agents </Text>
+                <Text bold>{top(act.agents)}</Text>
+                <Text dimColor>{'  '}</Text>
+              </Text>
+            )}
+            {Object.keys(act.mcp).length > 0 && (
+              <Text>
+                <Text color="merged">MCP </Text>
+                <Text bold>{top(act.mcp)}</Text>
+                <Text dimColor>{'  '}</Text>
+              </Text>
+            )}
+            {Object.keys(act.tools).length > 0 && <Text dimColor>{top(act.tools)}</Text>}
+          </Text>
+        )}
         {(s || day) && (
           <Box columnGap={2}>
             <Text dimColor>API-price equivalent</Text>

@@ -26,6 +26,7 @@ Other Jev routers exist. This one adds three things:
 ╭──────────────────────────────────────────────────────────────────────────────────────╮
 │  JEV   ● Opus 5.5  effort ▰▰▱▱▱ med  ctx ▰▰▰▰▰▱▱▱ 140k             ⟳ working · step 4  ▴ │
 │ Jev routine ███░░ 77% → wants sonnet  ■ kept opus (ratchet)  182ms  │ session opus 82% sonnet 18% │
+│ used skill pdf  agents Explore×2  MCP github×3  Bash×7 Read×4 Edit×2                         │
 │ ≈ $1.84 this session · $12.40 today (API list price) · saved $3.10                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -122,7 +123,8 @@ Message tags override routing for one turn: `#fast` `#sonnet` `#opus` `#max` `#f
 
 - **Line 1 (live):** model and effort of the request in flight (tool steps included), the context meter (yellow from 100k, red from 150k: time for a fresh session), and working/idle.
 - **Line 2:** Jev's level and confidence for your last message, what the router did, rule chips (`redacted`, `risky`, `inherit`, `escalated`), and the session's model mix.
-- **Line 3:** API-list-price equivalent for the session and for today, and how much routing saved.
+- **Line 3, "used":** what Claude used since your last message: skills, subagents, MCP servers (by server) and the other tools, with counts, subagents' calls included. `/jev-activity` lists the same for the turn and the whole session.
+- **Line 4:** API-list-price equivalent for the session and for today, and how much routing saved.
 - The `◆ Jev` footer button (hotkey `j`) or `/jev` pauses routing for this session only. `▴`/`▾` switches to a one-line view.
 
 ## Commands

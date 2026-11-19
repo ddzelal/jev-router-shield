@@ -33,6 +33,14 @@ export type Stats = {
 /** API-list-price equivalents for today, all sessions. */
 export type Today = { day: string; costUsd: number; baseUsd: number }
 
+/** What Claude used: skills, subagents, MCP servers (by server), other tools; counts. */
+export type Activity = {
+  skills: Record<string, number>
+  agents: Record<string, number>
+  mcp: Record<string, number>
+  tools: Record<string, number>
+}
+
 /** `down`: the router did not answer; `off`: this session does not go through it. */
 export type Link = 'up' | 'down' | 'off'
 
@@ -46,6 +54,10 @@ declare module 'claude-code' {
       paused: boolean
       link: Link
       compact: boolean
+      /** since your last message */
+      turnAct: Activity
+      /** since the session started */
+      sessAct: Activity
     }
   }
 }
